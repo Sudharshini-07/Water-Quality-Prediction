@@ -26,7 +26,7 @@ st.markdown("Predict whether water is potable (safe to drink) based on its chemi
 # Simulate fetching realtime data from uploaded file
 @st.cache_data
 def load_data():
-    df = pd.read_csv("/content/water_potability.csv")
+    df = pd.read_csv("water_potability.csv")
     df.fillna(df.mean(numeric_only=True), inplace=True)
     return df
 
