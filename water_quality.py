@@ -17,6 +17,7 @@ from sklearn.metrics import classification_report, accuracy_score
 from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
 import seaborn as sns
+import random
 
 st.set_page_config(page_title="Water Potability Prediction", layout="wide")
 
@@ -114,8 +115,16 @@ with st.expander("📈 Model Accuracy (on test data)"):
     st.text("Classification Report:")
     st.code(classification_report(y_test, y_pred, target_names=["Not Potable", "Potable"]))
 
+def get_next_sample(data):
+    idx = random.randint(0, len(data) - 1)
+    sample_row = data.drop("Potability", axis=1).iloc[idx]
+    true_label = data["Potability"].iloc[idx]
+    return sample_row, true_label
+
+# Streamlit button and prediction logic
 if st.button("Fetch Next Data Row (Simulated API Call)"):
-    row, true_label = get_next_sample()
+    row, true_label = get_next_sample(data)
+
     if row is not None:
         row_scaled = scaler.transform([row])
         pred = model.predict(row_scaled)[0]
