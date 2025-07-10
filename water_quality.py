@@ -18,13 +18,15 @@ from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
 import seaborn as sns
 import random
+import time
+
 
 st.set_page_config(page_title="Water Potability Prediction", layout="wide")
 
 st.title("💧 Water Potability Prediction - Real-time Simulated")
 st.markdown("Predict whether water is potable (safe to drink) based on its chemical properties.")
 
-# Simulate fetching realtime data from uploaded file
+
 @st.cache_data
 def load_data():
     df = pd.read_csv("water_potability.csv")
@@ -66,10 +68,41 @@ with col1:
 
 with col2:
     st.write("### Potability Distribution")
-    fig, ax = plt.subplots()
-    sns.countplot(x='Potability', data=data, ax=ax)
-    ax.set_xticklabels(['Not Potable', 'Potable'])
-    st.pyplot(fig)
+    fig1, ax1 = plt.subplots()
+    sns.countplot(x='Potability', data=data, ax=ax1)
+    ax1.set_xticklabels(['Not Potable', 'Potable'])
+    st.pyplot(fig1)
+
+    st.write("---")
+    st.write("### 🔄 More Visual Insights")
+
+    
+    visualizations = [
+        ("Distribution of pH", lambda: sns.histplot(data['ph'], bins=20, kde=True)),
+        ("Boxplot of Sulfate", lambda: sns.boxplot(data['Sulfate'])),
+        ("Correlation Heatmap", lambda: sns.heatmap(data.corr(), annot=True, cmap='coolwarm')),
+    ]
+
+    
+    if 'viz_idx' not in st.session_state:
+        st.session_state.viz_idx = 0
+
+    title, plot_func = visualizations[st.session_state.viz_idx]
+
+    st.markdown(f"**{title}**")
+    fig2, ax2 = plt.subplots()
+    plot_func()
+    st.pyplot(fig2)
+
+    col_a, col_b = st.columns(2)
+    with col_a:
+        if st.button("⬅️ Previous", key="prev"):
+            st.session_state.viz_idx = max(0, st.session_state.viz_idx - 1)
+
+    with col_b:
+        if st.button("➡️ Next", key="next"):
+            st.session_state.viz_idx = min(len(visualizations) - 1, st.session_state.viz_idx + 1)
+
 
 st.header("📥 Enter Water Test Parameters:")
 
@@ -91,9 +124,9 @@ with st.form("user_input_form"):
 
     submitted = st.form_submit_button("🔍 Predict")
 
-# ----------- Prediction --------------
+
 if submitted:
-    # Collect user input into a DataFrame
+    
     input_data = np.array([[ph, Hardness, Solids, Chloramines, Sulfate,
                             Conductivity, Organic_carbon, Trihalomethanes, Turbidity]])
 
@@ -107,7 +140,7 @@ if submitted:
     else:
         st.error(f"❌ Water is **Not Potable** with {probability*100:.2f}% confidence.")
 
-# ----------- Optional: Model Accuracy --------------
+
 with st.expander("📈 Model Accuracy (on test data)"):
     y_pred = model.predict(X_test)
     acc = accuracy_score(y_test, y_pred)
@@ -121,7 +154,7 @@ def get_next_sample(data):
     true_label = data["Potability"].iloc[idx]
     return sample_row, true_label
 
-# Streamlit button and prediction logic
+
 if st.button("Fetch Next Data Row (Simulated API Call)"):
     row, true_label = get_next_sample(data)
 
