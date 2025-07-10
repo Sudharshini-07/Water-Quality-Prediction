@@ -67,41 +67,42 @@ with col1:
     st.dataframe(data.head())
 
 with col2:
-    st.write("### Potability Distribution")
-    fig1, ax1 = plt.subplots()
-    sns.countplot(x='Potability', data=data, ax=ax1)
-    ax1.set_xticklabels(['Not Potable', 'Potable'])
-    st.pyplot(fig1)
+    st.write("### Visual Insights")
 
-    st.write("---")
-    st.write("### 🔄 More Visual Insights")
-
-    
-    visualizations = [
-        ("Distribution of pH", lambda: sns.histplot(data['ph'], bins=20, kde=True)),
-        ("Boxplot of Sulfate", lambda: sns.boxplot(data['Sulfate'])),
-        ("Correlation Heatmap", lambda: sns.heatmap(data.corr(), annot=True, cmap='coolwarm')),
+    # List of flashcard visualizations (all included)
+    flashcards = [
+        ("Potability Distribution", lambda ax: sns.countplot(x='Potability', data=data, ax=ax)),
+        ("Distribution of pH", lambda ax: sns.histplot(data['ph'], bins=20, kde=True, ax=ax)),
+        ("Boxplot of Sulfate", lambda ax: sns.boxplot(y=data['Sulfate'], ax=ax)),
+        ("Correlation Heatmap", lambda ax: sns.heatmap(data.corr(), annot=True, cmap='coolwarm', ax=ax)),
     ]
 
-    
+    # Track flashcard index using session state
     if 'viz_idx' not in st.session_state:
         st.session_state.viz_idx = 0
 
-    title, plot_func = visualizations[st.session_state.viz_idx]
+    # Get current visual title and function
+    title, plot_func = flashcards[st.session_state.viz_idx]
 
     st.markdown(f"**{title}**")
-    fig2, ax2 = plt.subplots()
-    plot_func()
-    st.pyplot(fig2)
+    fig, ax = plt.subplots()
+    plot_func(ax)
+    
+    # Fix labels for potability
+    if title == "Potability Distribution":
+        ax.set_xticklabels(['Not Potable', 'Potable'])
 
-    col_a, col_b = st.columns(2)
-    with col_a:
-        if st.button("⬅️ Previous", key="prev"):
+    st.pyplot(fig)
+
+    # Navigation buttons
+    col_nav1, col_nav2 = st.columns([1, 1])
+    with col_nav1:
+        if st.button("⬅ Previous", key="prev"):
             st.session_state.viz_idx = max(0, st.session_state.viz_idx - 1)
 
-    with col_b:
-        if st.button("➡️ Next", key="next"):
-            st.session_state.viz_idx = min(len(visualizations) - 1, st.session_state.viz_idx + 1)
+    with col_nav2:
+        if st.button("➡ Next", key="next"):
+            st.session_state.viz_idx = min(len(flashcards) - 1, st.session_state.viz_idx + 1)
 
 
 st.header("📥 Enter Water Test Parameters:")
