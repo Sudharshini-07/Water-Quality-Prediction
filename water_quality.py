@@ -38,16 +38,16 @@ def load_data():
 @st.cache_data(ttl=300)  # Cache for 5 minutes
 def fetch_realtime_data():
     try:
-                # Modified API request that should work
-        url = "https://www.waterqualitydata.us/data/Result/search?" + \
-              "statecode=US%3A06&" + \  # California state code
-              "characteristicType=Physical&" + \
-              "characteristicType=Inorganics%2C%20Major%2C%20Metals&" + \
-              "characteristicType=Inorganics%2C%20Major%2C%20Non-metals&" + \
-              "siteType=Stream&" + \
-              "startDateLo=01-01-2024&" + \
-              "mimeType=csv&" + \
-              "zip=no"
+        # California state code - US:06
+        url = ("https://www.waterqualitydata.us/data/Result/search?"
+               "statecode=US%3A06&"
+               "characteristicType=Physical&"
+               "characteristicType=Inorganics%2C%20Major%2C%20Metals&"
+               "characteristicType=Inorganics%2C%20Major%2C%20Non-metals&"
+               "siteType=Stream&"
+               "startDateLo=01-01-2024&"
+               "mimeType=csv&"
+               "zip=no")
         
         response = requests.get(url, timeout=10)
         
