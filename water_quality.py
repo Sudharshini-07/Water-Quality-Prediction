@@ -84,6 +84,7 @@ def fetch_realtime_data():
         st.error(f"Error fetching real-time data: {str(e)}")
         return None
 
+
 data = load_data()
 
 def preprocess(df):
