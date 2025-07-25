@@ -11,7 +11,7 @@ from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
 import seaborn as sns
 import requests
-from lo import StringIO
+from io import StringIO
 
 # Page configuration
 st.set_page_config(
@@ -35,19 +35,15 @@ def load_data():
     df.fillna(df.median(numeric_only=True), inplace=True)
     return df
 
-@st.cache_data(ttl=300)  # Cache for 5 minutes
+@st.cache_data(ttl=300)
 def fetch_realtime_data():
     try:
-        # More reliable API request with multiple fallback parameters
+        # Simplified working parameters
         params = {
             'statecode': 'US:06',  # California
-            'characteristicType': ['Physical', 'Inorganics, Major, Metals', 'Inorganics, Major, Non-metals'],
-            'siteType': 'Stream',
-            'startDateLo': '2024-01-01',
-            'mimeType': 'csv',
-            'zip': 'no',
-            'sampleMedia': 'Water',
-            'providers': 'NWIS'
+            'characteristicName': ['pH', 'Specific conductance', 'Hardness', 'Turbidity'],
+            'startDateLo': '2023-01-01',  # Wider date range
+            'mimeType': 'csv'
         }
         
         # First try with timeout=15
@@ -59,7 +55,6 @@ def fetch_realtime_data():
             )
             response.raise_for_status()
             
-        # If timeout occurs, try with timeout=30
         except requests.exceptions.Timeout:
             st.warning("First attempt timed out, retrying with longer timeout...")
             response = requests.get(
@@ -69,43 +64,45 @@ def fetch_realtime_data():
             )
             response.raise_for_status()
             
-        # Process the successful response
-        data = pd.read_csv(StringIO(response.text))
-        
-        # Pivot and clean data
-        pivoted_data = data.pivot_table(
-            index=['MonitoringLocationIdentifier', 'ActivityStartDate'],
-            columns='CharacteristicName',
-            values='ResultMeasureValue',
-            aggfunc='first'
-        ).reset_index()
-        
-        # Standardize column names
-        column_mapping = {
-            'pH': 'ph',
-            'Hardness': 'Hardness',
-            'Specific conductance': 'Conductivity',
-            'Conductivity': 'Conductivity',
-            'Turbidity': 'Turbidity'
-        }
-        
-        pivoted_data = pivoted_data.rename(columns=column_mapping)
-        
-        # Convert numeric columns
-        numeric_cols = ['ph', 'Hardness', 'Conductivity', 'Turbidity']
-        for col in numeric_cols:
-            if col in pivoted_data.columns:
-                pivoted_data[col] = pd.to_numeric(pivoted_data[col], errors='coerce')
-        
-        return pivoted_data.dropna()
-        
+        # Process response
+        if response.status_code == 200:
+            data = pd.read_csv(StringIO(response.text))
+            if len(data) == 0:
+                st.warning("No recent data found. Using sample data instead.")
+                return None
+                
+            # Pivot and clean data
+            pivoted_data = data.pivot_table(
+                index=['MonitoringLocationIdentifier', 'ActivityStartDate'],
+                columns='CharacteristicName',
+                values='ResultMeasureValue',
+                aggfunc='first'
+            ).reset_index()
+            
+            # Standardize column names
+            column_mapping = {
+                'pH': 'ph',
+                'Specific conductance': 'Conductivity',
+                'Hardness': 'Hardness',
+                'Turbidity': 'Turbidity'
+            }
+            
+            pivoted_data = pivoted_data.rename(columns=column_mapping)
+            
+            # Convert numeric columns
+            numeric_cols = ['ph', 'Hardness', 'Conductivity', 'Turbidity']
+            for col in numeric_cols:
+                if col in pivoted_data.columns:
+                    pivoted_data[col] = pd.to_numeric(pivoted_data[col], errors='coerce')
+            
+            return pivoted_data.dropna()
+            
     except requests.exceptions.RequestException as e:
         st.error(f"API request failed: {str(e)}")
         return None
     except Exception as e:
         st.error(f"Error processing data: {str(e)}")
         return None
-
 
 data = load_data()
 
