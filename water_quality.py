@@ -38,50 +38,72 @@ def load_data():
 @st.cache_data(ttl=300)  # Cache for 5 minutes
 def fetch_realtime_data():
     try:
-        # California state code - US:06
-        url = ("https://www.waterqualitydata.us/data/Result/search?"
-               "statecode=US%3A06&"
-               "characteristicType=Physical&"
-               "characteristicType=Inorganics%2C%20Major%2C%20Metals&"
-               "characteristicType=Inorganics%2C%20Major%2C%20Non-metals&"
-               "siteType=Stream&"
-               "startDateLo=01-01-2024&"
-               "mimeType=csv&"
-               "zip=no")
+        # More reliable API request with multiple fallback parameters
+        params = {
+            'statecode': 'US:06',  # California
+            'characteristicType': ['Physical', 'Inorganics, Major, Metals', 'Inorganics, Major, Non-metals'],
+            'siteType': 'Stream',
+            'startDateLo': '2024-01-01',
+            'mimeType': 'csv',
+            'zip': 'no',
+            'sampleMedia': 'Water',
+            'providers': 'NWIS'
+        }
         
-        response = requests.get(url, timeout=10)
+        # First try with timeout=15
+        try:
+            response = requests.get(
+                "https://www.waterqualitydata.us/data/Result/search",
+                params=params,
+                timeout=15
+            )
+            response.raise_for_status()
+            
+        # If timeout occurs, try with timeout=30
+        except requests.exceptions.Timeout:
+            st.warning("First attempt timed out, retrying with longer timeout...")
+            response = requests.get(
+                "https://www.waterqualitydata.us/data/Result/search",
+                params=params,
+                timeout=30
+            )
+            response.raise_for_status()
+            
+        # Process the successful response
+        data = pd.read_csv(StringIO(response.text))
         
-        if response.status_code == 200:
-            # Convert bytes to string and then to DataFrame
-            data = pd.read_csv(StringIO(response.text))
-            
-            # Pivot the data to get characteristics as columns
-            pivoted_data = data.pivot_table(index=['MonitoringLocationIdentifier', 'ActivityStartDate'],
-                                          columns='CharacteristicName',
-                                          values='ResultMeasureValue',
-                                          aggfunc='first').reset_index()
-            
-            # Convert columns to numeric and rename to match our model
-            column_mapping = {
-                'pH': 'ph',
-                'Total hardness': 'Hardness',
-                'Specific conductance': 'Conductivity',
-                'Turbidity': 'Turbidity'
-            }
-            
-            pivoted_data.rename(columns=column_mapping, inplace=True)
-            
-            numeric_cols = ['ph', 'Hardness', 'Conductivity', 'Turbidity']
-            for col in numeric_cols:
-                if col in pivoted_data.columns:
-                    pivoted_data[col] = pd.to_numeric(pivoted_data[col], errors='coerce')
-            
-            return pivoted_data.dropna()
-        else:
-            st.error(f"API request failed with status {response.status_code}")
-            return None
+        # Pivot and clean data
+        pivoted_data = data.pivot_table(
+            index=['MonitoringLocationIdentifier', 'ActivityStartDate'],
+            columns='CharacteristicName',
+            values='ResultMeasureValue',
+            aggfunc='first'
+        ).reset_index()
+        
+        # Standardize column names
+        column_mapping = {
+            'pH': 'ph',
+            'Hardness': 'Hardness',
+            'Specific conductance': 'Conductivity',
+            'Conductivity': 'Conductivity',
+            'Turbidity': 'Turbidity'
+        }
+        
+        pivoted_data = pivoted_data.rename(columns=column_mapping)
+        
+        # Convert numeric columns
+        numeric_cols = ['ph', 'Hardness', 'Conductivity', 'Turbidity']
+        for col in numeric_cols:
+            if col in pivoted_data.columns:
+                pivoted_data[col] = pd.to_numeric(pivoted_data[col], errors='coerce')
+        
+        return pivoted_data.dropna()
+        
+    except requests.exceptions.RequestException as e:
+        st.error(f"API request failed: {str(e)}")
+        return None
     except Exception as e:
-        st.error(f"Error fetching real-time data: {str(e)}")
+        st.error(f"Error processing data: {str(e)}")
         return None
 
 
