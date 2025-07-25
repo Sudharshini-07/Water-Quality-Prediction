@@ -11,7 +11,7 @@ from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
 import seaborn as sns
 import requests
-from io import StringIO
+from lo import StringIO
 
 # Page configuration
 st.set_page_config(
