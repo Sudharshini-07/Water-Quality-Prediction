@@ -38,7 +38,7 @@ def load_data():
 @st.cache_data(ttl=300)  # Cache for 5 minutes
 def fetch_realtime_data():
     try:
-        # Modified API request that should work
+                # Modified API request that should work
         url = "https://www.waterqualitydata.us/data/Result/search?" + \
               "statecode=US%3A06&" + \  # California state code
               "characteristicType=Physical&" + \
