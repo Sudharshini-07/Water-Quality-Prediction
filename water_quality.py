@@ -53,33 +53,64 @@ def fetch_realtime_data(force_refresh=False):
     cache_key = "realtime_water_data"
     
     if not force_refresh and cache_key in st.session_state:
-        if time.time() - st.session_state[cache_key]['timestamp'] < 300:
+        if time.time() - st.session_state[cache_key]['timestamp'] < 300:  # 5 minute cache
             return st.session_state[cache_key]['data']
     
     try:
-        # [Previous API call code remains the same...]
+        # USGS API with multiple monitoring stations
+        stations = ['11447650', '11337190', '11451100']  # Different California stations
+        params = {
+            'format': 'json',
+            'sites': ','.join(stations),
+            'parameterCd': '00400,00095,00010',  # pH, Conductivity, Temperature
+            'siteStatus': 'all'
+        }
         
-        # Ensure all required features are present with fallback values
+        response = requests.get(
+            "https://waterservices.usgs.gov/nwis/iv/",
+            params=params,
+            timeout=15
+        )
+        response.raise_for_status()
+        
+        data = response.json()
+        all_readings = []  # Initialize the list
+        
+        for series in data['value']['timeSeries']:
+            site_code = series['sourceInfo']['siteCode'][0]['value']
+            param_code = series['variable']['variableCode'][0]['value']
+            value = float(series['values'][0]['value'][0]['value'])
+            timestamp = series['values'][0]['value'][0]['dateTime']
+            
+            all_readings.append({
+                'site': site_code,
+                'param': param_code,
+                'value': value,
+                'time': timestamp
+            })
+        
+        # Process the most recent reading from each station
         processed_data = {
-            'ph': round(np.random.uniform(6.0, 8.5), 2),
-            'Hardness': np.random.randint(80, 350),
-            'Solids': np.random.randint(8000, 25000),
-            'Chloramines': round(np.random.uniform(1.0, 10.0), 2),
-            'Sulfate': np.random.randint(150, 500),
-            'Conductivity': np.random.randint(150, 800),
-            'Organic_carbon': round(np.random.uniform(2.0, 20.0), 2),
-            'Trihalomethanes': np.random.randint(10, 120),
-            'Turbidity': round(np.random.uniform(0.5, 6.0), 2),
+            'ph': np.random.uniform(6.5, 8.5),  # Fallback range
+            'Hardness': np.random.uniform(100, 300),
+            'Conductivity': np.random.uniform(200, 600),
+            'Turbidity': np.random.uniform(1, 5),
+            'Solids': np.random.uniform(5000, 20000),
+            'Chloramines': np.random.uniform(1, 10),
+            'Sulfate': np.random.uniform(200, 500),
+            'Organic_carbon': np.random.uniform(2, 20),
+            'Trihalomethanes': np.random.uniform(10, 100),
             'timestamp': pd.to_datetime('now').strftime('%Y-%m-%d %H:%M:%S')
         }
         
-        # Update with actual API values if available
-        for reading in all_readings:
+        # Update with actual readings if available
+        for reading in all_readings:  # Now properly defined
             if reading['param'] == '00400':  # pH
                 processed_data['ph'] = reading['value']
             elif reading['param'] == '00095':  # Conductivity
                 processed_data['Conductivity'] = reading['value']
         
+        # Store in session state
         st.session_state[cache_key] = {
             'data': processed_data,
             'timestamp': time.time()
