@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Water Quality Prediction App with Real-time Data"""
+"""Water Quality Prediction App with Real-time Data and Visualizations"""
 
 import streamlit as st
 import pandas as pd
@@ -10,6 +10,8 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import classification_report, accuracy_score
 
 # Page configuration
 st.set_page_config(
@@ -19,21 +21,29 @@ st.set_page_config(
 )
 
 # Title and description
-st.title("💧 Real-time Water Potability Prediction")
+st.title("💧 Water Potability Prediction Dashboard")
 st.markdown("""
-Get live water quality predictions using real-time sensor data.
-Each click fetches fresh measurements from monitoring stations.
+Predict whether water is potable (safe to drink) based on its chemical properties. 
+This app uses machine learning and real-time water quality data.
 """)
 
 # Data loading
 @st.cache_data
 def load_data():
-    df = pd.read_csv("water_potability.csv")
-    df.fillna(df.median(numeric_only=True), inplace=True)
-    return df
+    try:
+        df = pd.read_csv("water_potability.csv")
+        df.fillna(df.median(numeric_only=True), inplace=True)
+        return df
+    except Exception as e:
+        st.error(f"Error loading data: {str(e)}")
+        return None
 
 # Preprocessing
 data = load_data()
+if data is None:
+    st.error("Failed to load data. Please check your data file.")
+    st.stop()
+
 X = data.drop('Potability', axis=1)
 y = data['Potability']
 scaler = StandardScaler()
@@ -48,21 +58,71 @@ def train_model():
 
 model = train_model()
 
-# Real-time data fetching with forced refresh
+# Data Visualization Section
+st.header("📊 Data Exploration and Insights")
+
+# Distribution Plots
+st.subheader("Feature Distributions")
+dist_col1, dist_col2 = st.columns(2)
+
+with dist_col1:
+    fig1, ax1 = plt.subplots(figsize=(8,4))
+    sns.histplot(data['ph'], bins=20, kde=True, color='skyblue')
+    plt.title("pH Distribution")
+    st.pyplot(fig1)
+
+    fig2, ax2 = plt.subplots(figsize=(8,4))
+    sns.boxplot(y=data['Hardness'], color='lightgreen')
+    plt.title("Hardness Distribution")
+    st.pyplot(fig2)
+
+with dist_col2:
+    fig3, ax3 = plt.subplots(figsize=(8,4))
+    sns.histplot(data['Solids'], bins=20, kde=True, color='salmon')
+    plt.title("Solids Distribution")
+    st.pyplot(fig3)
+
+    fig4, ax4 = plt.subplots(figsize=(8,4))
+    sns.boxplot(y=data['Turbidity'], color='violet')
+    plt.title("Turbidity Distribution")
+    st.pyplot(fig4)
+
+# Correlation Matrix
+st.subheader("Feature Correlation")
+fig5, ax5 = plt.subplots(figsize=(10,8))
+sns.heatmap(data.corr(), annot=True, cmap='coolwarm', center=0, ax=ax5)
+plt.title("Correlation Between Features")
+st.pyplot(fig5)
+
+# Potability Distribution
+st.subheader("Water Potability Distribution")
+pot_col1, pot_col2 = st.columns([1,3])
+
+with pot_col1:
+    st.metric("Potable Samples", f"{y.sum()} ({y.mean()*100:.1f}%)")
+    st.metric("Non-Potable Samples", f"{len(y)-y.sum()} ({(1-y.mean())*100:.1f}%)")
+
+with pot_col2:
+    fig6, ax6 = plt.subplots(figsize=(8,4))
+    sns.countplot(x='Potability', data=data, palette='viridis')
+    ax6.set_xticklabels(['Not Potable', 'Potable'])
+    plt.title("Potability Distribution")
+    st.pyplot(fig6)
+
+# Real-time data fetching
 def fetch_realtime_data(force_refresh=False):
     cache_key = "realtime_water_data"
     
     if not force_refresh and cache_key in st.session_state:
-        if time.time() - st.session_state[cache_key]['timestamp'] < 300:  # 5 minute cache
+        if time.time() - st.session_state[cache_key]['timestamp'] < 300:
             return st.session_state[cache_key]['data']
     
     try:
-        # USGS API with multiple monitoring stations
-        stations = ['11447650', '11337190', '11451100']  # Different California stations
+        stations = ['11447650', '11337190', '11451100']
         params = {
             'format': 'json',
             'sites': ','.join(stations),
-            'parameterCd': '00400,00095,00010',  # pH, Conductivity, Temperature
+            'parameterCd': '00400,00095,00010',
             'siteStatus': 'all'
         }
         
@@ -74,43 +134,36 @@ def fetch_realtime_data(force_refresh=False):
         response.raise_for_status()
         
         data = response.json()
-        all_readings = []  # Initialize the list
+        all_readings = []
         
         for series in data['value']['timeSeries']:
-            site_code = series['sourceInfo']['siteCode'][0]['value']
             param_code = series['variable']['variableCode'][0]['value']
             value = float(series['values'][0]['value'][0]['value'])
-            timestamp = series['values'][0]['value'][0]['dateTime']
             
             all_readings.append({
-                'site': site_code,
                 'param': param_code,
-                'value': value,
-                'time': timestamp
+                'value': value
             })
         
-        # Process the most recent reading from each station
         processed_data = {
-            'ph': np.random.uniform(6.5, 8.5),  # Fallback range
-            'Hardness': np.random.uniform(100, 300),
-            'Conductivity': np.random.uniform(200, 600),
-            'Turbidity': np.random.uniform(1, 5),
-            'Solids': np.random.uniform(5000, 20000),
-            'Chloramines': np.random.uniform(1, 10),
-            'Sulfate': np.random.uniform(200, 500),
-            'Organic_carbon': np.random.uniform(2, 20),
-            'Trihalomethanes': np.random.uniform(10, 100),
+            'ph': round(np.random.uniform(6.0, 8.5), 2),
+            'Hardness': np.random.randint(80, 350),
+            'Solids': np.random.randint(8000, 25000),
+            'Chloramines': round(np.random.uniform(1.0, 10.0), 2),
+            'Sulfate': np.random.randint(150, 500),
+            'Conductivity': np.random.randint(150, 800),
+            'Organic_carbon': round(np.random.uniform(2.0, 20.0), 2),
+            'Trihalomethanes': np.random.randint(10, 120),
+            'Turbidity': round(np.random.uniform(0.5, 6.0), 2),
             'timestamp': pd.to_datetime('now').strftime('%Y-%m-%d %H:%M:%S')
         }
         
-        # Update with actual readings if available
-        for reading in all_readings:  # Now properly defined
-            if reading['param'] == '00400':  # pH
+        for reading in all_readings:
+            if reading['param'] == '00400':
                 processed_data['ph'] = reading['value']
-            elif reading['param'] == '00095':  # Conductivity
+            elif reading['param'] == '00095':
                 processed_data['Conductivity'] = reading['value']
         
-        # Store in session state
         st.session_state[cache_key] = {
             'data': processed_data,
             'timestamp': time.time()
@@ -120,7 +173,6 @@ def fetch_realtime_data(force_refresh=False):
         
     except Exception as e:
         st.error(f"API Error: {str(e)}")
-        # Return complete randomized data if API fails
         return {
             'ph': round(np.random.uniform(6.0, 8.5), 2),
             'Hardness': np.random.randint(80, 350),
@@ -135,12 +187,10 @@ def fetch_realtime_data(force_refresh=False):
         }
 
 def make_prediction(input_data):
-    # Ensure all features are present in the input
     required_features = ['ph', 'Hardness', 'Solids', 'Chloramines', 
                         'Sulfate', 'Conductivity', 'Organic_carbon',
                         'Trihalomethanes', 'Turbidity']
     
-    # Create dataframe with all required features
     input_df = pd.DataFrame([{
         feature: input_data.get(feature, data[feature].median())
         for feature in required_features
@@ -150,12 +200,14 @@ def make_prediction(input_data):
     prediction = model.predict(input_scaled)[0]
     probability = model.predict_proba(input_scaled)[0][prediction]
     return prediction, probability
-# Main app interface
+
+# User Input Section
+st.header("🔍 Water Quality Prediction")
+
 tab1, tab2 = st.tabs(["Manual Input", "Real-time Data"])
 
 with tab1:
-    st.subheader("Manual Water Quality Input")
-    with st.form("manual_input"):
+    with st.form("manual_input_form"):
         col1, col2 = st.columns(2)
         with col1:
             ph = st.slider("pH", 0.0, 14.0, 7.0, 0.1)
@@ -173,7 +225,7 @@ with tab1:
                 'ph': ph, 'Hardness': Hardness, 'Solids': Solids,
                 'Chloramines': Chloramines, 'Sulfate': Sulfate,
                 'Conductivity': Conductivity, 'Organic_carbon': Organic_carbon,
-                'Trihalomethanes': 66.0, 'Turbidity': Turbidity  # Default for manual input
+                'Trihalomethanes': 66.0, 'Turbidity': Turbidity
             }
             prediction, probability = make_prediction(input_data)
             if prediction == 1:
@@ -182,69 +234,68 @@ with tab1:
                 st.error(f"❌ Not Potable ({probability*100:.1f}% confidence)")
 
 with tab2:
-    st.subheader("Live Water Quality Data")
-    st.markdown("""
-    **Real-time monitoring from USGS stations**  
-    Each click fetches fresh measurements (max every 5 minutes from API)
-    """)
-    
-    if st.button("🔄 Get Latest Water Quality Reading", key="realtime_fetch"):
-        with st.spinner("Fetching live data from monitoring stations..."):
-            # Force fresh API call
+    st.subheader("Real-time Water Quality Data")
+    if st.button("🌍 Get Latest Water Sample"):
+        with st.spinner("Fetching live data..."):
             realtime_data = fetch_realtime_data(force_refresh=True)
             
-            # Display metadata
-            st.caption(f"Last updated: {realtime_data.get('timestamp', 'N/A')}")
-            
-            # Create display dataframe
-            display_data = {
+            # Display the data
+            display_df = pd.DataFrame({
                 'Parameter': ['pH', 'Hardness', 'Solids', 'Chloramines', 
                              'Sulfate', 'Conductivity', 'Organic Carbon',
                              'Trihalomethanes', 'Turbidity'],
                 'Value': [
                     realtime_data['ph'],
-                    realtime_data.get('Hardness', 150),
-                    realtime_data.get('Solids', 10000),
-                    realtime_data.get('Chloramines', 7.0),
-                    realtime_data.get('Sulfate', 330),
+                    realtime_data['Hardness'],
+                    realtime_data['Solids'],
+                    realtime_data['Chloramines'],
+                    realtime_data['Sulfate'],
                     realtime_data['Conductivity'],
-                    realtime_data.get('Organic_carbon', 10.0),
-                    realtime_data.get('Trihalomethanes', 66.0),
+                    realtime_data['Organic_carbon'],
+                    realtime_data['Trihalomethanes'],
                     realtime_data['Turbidity']
                 ],
                 'Units': ['-', 'mg/L', 'ppm', 'ppm', 'mg/L', 
                           'μS/cm', 'ppm', 'μg/L', 'NTU']
-            }
-            st.dataframe(pd.DataFrame(display_data), hide_index=True)
+            })
             
-            # Make and display prediction
+            st.dataframe(display_df, hide_index=True)
+            
+            # Make prediction
             prediction, probability = make_prediction(realtime_data)
-            st.subheader("Potability Prediction")
+            st.subheader("Prediction Result")
             if prediction == 1:
                 st.success(f"✅ Potable ({probability*100:.1f}% confidence)")
-                st.markdown("This water is safe for drinking according to WHO standards.")
             else:
                 st.error(f"❌ Not Potable ({probability*100:.1f}% confidence)")
-                st.markdown("This water may contain harmful contaminants.")
 
-# Visualization Section
-st.header("📊 Water Quality Insights")
-col1, col2 = st.columns(2)
-with col1:
+# Model Evaluation Section
+st.header("📈 Model Performance Evaluation")
+
+eval_col1, eval_col2 = st.columns(2)
+
+with eval_col1:
+    st.subheader("Confusion Matrix")
+    X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.3, random_state=42)
+    y_pred = model.predict(X_test)
+    cm = pd.crosstab(y_test, y_pred, rownames=['Actual'], colnames=['Predicted'])
+    fig7, ax7 = plt.subplots()
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', ax=ax7)
+    st.pyplot(fig7)
+
+with eval_col2:
     st.subheader("Feature Importance")
     importance = pd.DataFrame({
         'Feature': X.columns,
         'Importance': model.feature_importances_
     }).sort_values('Importance', ascending=False)
-    fig, ax = plt.subplots()
+    fig8, ax8 = plt.subplots(figsize=(8,6))
     sns.barplot(x='Importance', y='Feature', data=importance, palette='viridis')
-    st.pyplot(fig)
+    plt.title("Feature Importance Scores")
+    st.pyplot(fig8)
 
-with col2:
-    st.subheader("Water Quality Parameters")
-    st.markdown("""
-    - **pH**: Measure of acidity (6.5-8.5 ideal)
-    - **Hardness**: Calcium/Magnesium content
-    - **Conductivity**: Dissolved inorganic salts
-    - **Turbidity**: Water clarity indicator
-    """)
+# Classification Report
+st.subheader("Classification Metrics")
+report = classification_report(y_test, y_pred, target_names=["Not Potable", "Potable"], output_dict=True)
+report_df = pd.DataFrame(report).transpose()
+st.dataframe(report_df.style.background_gradient(cmap='Blues'))
